@@ -1,0 +1,45 @@
+name: Jira Issue Transition on PR Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  jira:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Transition Jira issue
+        uses: atlassian/gajira-transition@v3
+        with:
+          issue: ${{ steps.extract_jira.outputs.issue }}
+          transition: Done
+        env:
+          JIRA_BASE_URL: https://your-domain.atlassian.net
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Extract Jira Issue Key from branch name
+        id: extract_jira
+        run: |
+          echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV
+          issue_key=$(echo "$branch" | grep -oE '[A-Z]+-[0-9]+')
+          echo "issue=$issue_key" >> $GITHUB_OUTPUT
+      - name: Send Slack Notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          fields: repo,message,commit
+          custom_payload: |
+            {
+              "attachments": [
+                {
+                  "color": "good",
+                  "title": "Jira Issue Closed",
+                  "text": "Issue *${{ steps.extract.outputs.issue }}* đã được chuyển sang *Done* 🎉",
+                  "footer": "GitHub Actions"
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
